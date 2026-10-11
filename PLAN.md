@@ -188,6 +188,34 @@
 
 ## 5. 需要确认的问题
 
+> 已确认（2026-10-12）：D1 = Fork 到 `Jiaocha/pi-web`（已建，fork 自 agegr/pi-web，MIT）；D2 = 方案 A 系统标题栏；D3 = T1+T2 后立刻出包；D4 = 先出包再瘦身。
+
+---
+
+## 6. 执行记录
+
+| 任务 | 状态 | 改动 | 结果 |
+|---|---|---|---|
+| D1 fork | ✅ | `Jiaocha/pi-web`（公开 fork，默认分支 main）；两个工作流的 `PI_WEB_REF` 已切换 | `gh repo fork` 成功 |
+| T1 窗口形态 | ✅ | `src-tauri/src/lib.rs`：`decorations(true)`（系统标题栏，M1 零前端依赖）；新增 `on_window_event(CloseRequested)` → `prevent_close()` + `hide()`（关闭到托盘，托盘「退出」才是真退出） | CI `cargo check` ✅ |
+| T2 图标 | ✅（占位） | `scripts/make-icon.mjs`：改为 π 字形白图 + #2563EB 圆角方底；本地生成并通过 PNG 结构校验 | 见 issue #1（待品牌图替换） |
+| T3 密钥 | ✅ | `tauri signer generate`（本机一次性；私钥在 `~/.tauri/pi-web-desktop.key`，无密码）；pubkey 已填入 `tauri.conf.json`；`TAURI_SIGNING_PRIVATE_KEY` 已写入仓库 Secret | `gh secret list` 确认 |
+| T3 首次出包 | ✅ | `git tag v0.12.0` → `Desktop release` 24 分钟跑完 | 草稿 Release 含：`Pi.Web.Desktop_0.12.0_x64-setup.exe`（**98.7MB**）、`.sig`、`latest.json`；**latest.json 签名与 .sig 完全一致**（已脚本比对） |
+| T8 载荷瘦身 | ⬜ | 未开始（先出包再瘦身） | 实测安装包 98.7MB，在 70–120MB 预估区间内；瘦身目标改为缩小安装后占用与更新下载量 |
+
+---
+
+## 7. 遗留问题与下一步
+
+1. **T4 人工验收（阻塞 M1 收尾）**：下载草稿 Release 的 `Pi.Web.Desktop_0.12.0_x64-setup.exe` 安装验证——冷启动无登录页、终端中文/resize、SSE 流式、标题栏按钮（验证 capability `remote` 生效）、退出无残留 node、卸载后 `~/.pi/agent` 保留。
+2. **T8 standalone 瘦身**（issue #3）：载荷 511MB → 120–180MB；注意 `serverExternalPackages` 需 `outputFileTracingIncludes` 补回。
+3. **T5 前端适配**（issue #2）：`PI_WEB_DESKTOP=1` 隐藏浏览器 UI + 无边框标题栏（`data-tauri-drag-region`），改完把 `lib.rs` 的 `decorations` 切回 `false`。
+4. **T6/T7**：单实例插件、`tauri-plugin-log` 落盘日志。
+5. **issue #1**：品牌图标替换占位 π 图。
+6. 私钥 `~/.tauri/pi-web-desktop.key` **离线备份**（丢失后已装用户无法再更新）。
+
+
+
 1. **pi-web 前端源码**：fork 到 `Jiaocha/pi-web` 并让 CI 的 `PI_WEB_REF` 指向它？还是只改上游仓库本地、给上游提 PR？或第一阶段完全不改前端？
 2. **首个版本窗口形态**：方案 A（系统标题栏，零前端改动，立刻可出包）还是方案 B（无边框 + 前端标题栏，需先做 T5）？
 3. **出包时机**：现在就生成签名密钥并打 `v0.12.0` 出草稿包，还是等 T5/T8 完成后再出？
