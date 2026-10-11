@@ -42,11 +42,10 @@ function chunk(type, data) {
   return Buffer.concat([length, body, crc]);
 }
 
-/** Draws a rounded square with a concentric ring, fully opaque inside. */
+/** Blue rounded square (#2563EB) with a simple white pi glyph. */
 function pixel(x, y) {
   const size = SIZE;
   const pad = size * 0.06;
-  const inner = size - pad * 2;
   const radius = size * 0.22;
 
   // Rounded-rectangle distance test.
@@ -55,12 +54,14 @@ function pixel(x, y) {
   const corner = Math.hypot(Math.max(dx - radius, 0), Math.max(dy - radius, 0));
   if (Math.hypot(dx, dy) > radius + 0.5 && corner > 0.5) return [0, 0, 0, 0];
 
-  const cx = x - size / 2;
-  const cy = y - size / 2;
-  const r = Math.hypot(cx, cy) / (size / 2);
-  if (r > 0.52 && r < 0.66) return [255, 255, 255, 255]; // ring
-  if (r <= 0.52) return [255, 255, 255, 255]; // glyph block
-  return [37, 99, 235, 255]; // #2563EB
+  const u = x / size;
+  const v = y / size;
+  const bar = u >= 0.24 && u <= 0.76 && v >= 0.26 && v <= 0.37;
+  const leftLeg = u >= 0.31 && u <= 0.39 && v >= 0.26 && v <= 0.74;
+  const rightLeg = u >= 0.61 && u <= 0.69 && v >= 0.26 && v <= 0.74;
+  if (bar || leftLeg || rightLeg) return [255, 255, 255, 255];
+
+  return [37, 99, 235, 255];
 }
 
 function encodePng() {

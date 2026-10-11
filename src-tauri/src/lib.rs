@@ -21,6 +21,14 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(ServerHandle(Mutex::new(None)))
+        // Closing the window hides it to the tray: exiting here would abort
+        // running agent sessions. The tray's "退出" is the real exit path.
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+        })
         .setup(|app| {
             let handle = app.handle().clone();
 
@@ -50,7 +58,10 @@ pub fn run() {
             .title("Pi Web")
             .inner_size(1280.0, 850.0)
             .min_inner_size(900.0, 620.0)
-            .decorations(false)
+            // Phase 1 (M1): keep the system titlebar. The frameless variant
+            // needs a frontend titlebar with data-tauri-drag-region, which is
+            // tracked separately (PLAN.md T5).
+            .decorations(true)
             .visible(true)
             .build()?;
 
