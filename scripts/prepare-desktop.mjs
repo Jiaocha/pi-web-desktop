@@ -155,18 +155,33 @@ function assembleApp(srcAppDir, appDir) {
   fs.cpSync(modules, path.join(appDir, "node_modules"), { recursive: true, dereference: false });
 }
 
-function assertNativePty(appDir) {
+/**
+ * node-pty 1.2.0-beta.15 ships prebuilds for win32-x64 / win32-arm64 /
+ * linux-x64 / linux-arm64 (verified on GitHub runners), so the normal
+ * `npm ci` install is enough. A source build is only needed when no prebuild
+ * matches, and that requires Visual Studio / build-essential to be present.
+ */
+function assertNativePty(appDir, target) {
   const root = path.join(appDir, "node_modules", "node-pty");
+  const [arch, , os] = target.split("-");
+  const platformDir = `${os}-${arch}`; // e.g. win32-x64
+
   const candidates = [
-    path.join(root, "build", "Release", "pty.node"),
-    path.join(root, "build", "Release", "conpty.node"),
-    path.join(root, "prebuilds"),
+    path.join(root, "prebuilds", platformDir),
+    path.join(root, "build", "Release"),
   ];
-  const found = candidates.find((candidate) => fs.existsSync(candidate));
+  const found = candidates.find((candidate) => {
+    if (!fs.existsSync(candidate)) return false;
+    return fs
+      .readdirSync(candidate, { withFileTypes: true, recursive: true })
+      .some((entry) => entry.isFile() && /\.node$|OpenConsole\.exe$/.test(entry.name));
+  });
+
   if (!found) {
     throw new Error(
-      "node-pty native binary missing. Windows/macOS builds need " +
-        "`npm rebuild node-pty --build-from-source --ignore-scripts=false --foreground-scripts`.",
+      `No node-pty native binary for ${platformDir}. Expected one of:\n  ${candidates.join("\n  ")}\n` +
+        "A source build (`npm rebuild node-pty --build-from-source`) needs Visual Studio (Windows) " +
+        "or build-essential + python3 (Debian/Ubuntu).",
     );
   }
   console.log(`✓ node-pty native binary: ${path.relative(appDir, found)}`);
@@ -194,7 +209,7 @@ async function main() {
 
   await installNodeRuntime(args.target, args.nodeVersion, binariesDir);
   assembleApp(srcAppDir, appDir);
-  assertNativePty(appDir);
+  assertNativePty(appDir, args.target);
 
   const buildId = path.join(appDir, ".next", "BUILD_ID");
   if (!fs.existsSync(buildId)) throw new Error(".next/BUILD_ID missing; the build did not finish.");

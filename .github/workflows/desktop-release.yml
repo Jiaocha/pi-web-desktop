@@ -84,12 +84,12 @@ jobs:
         run: npm ci
         working-directory: src-app
 
-      - name: Rebuild node-pty (Windows)
-        # node-pty 1.2.0-beta.15 只带 Linux 预编译包；Windows runner 自带
-        # MSVC Build Tools，可直接源码构建。缺失会在打开终端时才炸，必须早暴露。
-        if: runner.os == 'Windows'
-        run: npm rebuild node-pty --build-from-source --ignore-scripts=false --foreground-scripts
-        working-directory: src-app
+      # node-pty 1.2.0-beta.15 ships prebuilds for win32-x64 / win32-arm64 /
+      # linux-x64 / linux-arm64, so `npm ci` above already installed a working
+      # binary. Do NOT add --build-from-source: GitHub's Windows runners have no
+      # Visual Studio installation, so node-gyp fails with
+      # "Could not find any Visual Studio installation to use".
+      # prepare-desktop.mjs asserts the binary exists and fails loudly if not.
 
       - name: Build Next.js
         run: npm run build

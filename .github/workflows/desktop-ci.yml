@@ -55,8 +55,8 @@ jobs:
           cache-dependency-path: src-app/package-lock.json
       - run: npm ci
         working-directory: src-app
-      - run: npm rebuild node-pty --build-from-source --ignore-scripts=false --foreground-scripts
-        working-directory: src-app
+      # No `npm rebuild --build-from-source`: node-pty ships win32-x64/arm64
+      # prebuilds and the runner has no Visual Studio for node-gyp.
       - run: npm run build
         working-directory: src-app
         env:
