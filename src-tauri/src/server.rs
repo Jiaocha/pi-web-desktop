@@ -20,13 +20,19 @@ fn app_dir(app: &AppHandle) -> tauri::Result<PathBuf> {
     app.path().resolve("app", BaseDirectory::Resource)
 }
 
+/// The shell plugin's error type has no `From` impl into `tauri::Error`.
+fn shell_error<E: std::fmt::Display>(error: E) -> tauri::Error {
+    tauri::Error::Anyhow(anyhow::anyhow!("{error}"))
+}
+
 pub fn spawn(app: &AppHandle, port: u16) -> tauri::Result<CommandChild> {
     let dir = app_dir(app)?;
     let entry = dir.join("bin").join("pi-web.js");
 
     let command = app
         .shell()
-        .sidecar("node")?
+        .sidecar("node")
+        .map_err(shell_error)?
         .current_dir(&dir)
         // proxy.ts disables the login gate when PI_WEB_PASSWORD is falsy, and
         // an empty string is falsy; never inherit one from the environment.
@@ -42,7 +48,7 @@ pub fn spawn(app: &AppHandle, port: u16) -> tauri::Result<CommandChild> {
             &port.to_string(),
         ]);
 
-    let (mut rx, child) = command.spawn()?;
+    let (mut rx, child) = command.spawn().map_err(shell_error)?;
 
     // Mirror the server log so `tauri dev` shows what the sidecar is doing.
     // Swap this for tauri-plugin-log once a log target is configured.

@@ -66,8 +66,13 @@ pub fn run() {
 
     app.run(|app_handle, event| {
         if let RunEvent::Exit = event {
-            let state = app_handle.state::<ServerHandle>();
-            if let Some(child) = state.0.lock().expect("server handle mutex").take() {
+            // Bind the child first: a MutexGuard temporary in an `if let`
+            // scrutinee would outlive `state` (E0597).
+            let child = {
+                let state = app_handle.state::<ServerHandle>();
+                state.0.lock().ok().and_then(|mut guard| guard.take())
+            };
+            if let Some(child) = child {
                 let _ = child.kill();
             }
         }
