@@ -1,0 +1,37 @@
+[package]
+name = "pi-web-desktop"
+version = "0.12.0"
+description = "Tauri v2 shell that ships Pi Web as a desktop app"
+authors = ["agegr"]
+license = "MIT"
+repository = "https://github.com/agegr/pi-web"
+edition = "2021"
+rust-version = "1.90"
+
+[lib]
+name = "pi_web_desktop_lib"
+crate-type = ["lib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# tray-icon is required for TrayIconBuilder.
+tauri = { version = "2", features = ["tray-icon"] }
+# Shell spawns the Node sidecar; process allows relaunch after an update.
+tauri-plugin-shell = "2"
+tauri-plugin-process = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+# tauri-plugin-updater requires Rust >= 1.90.
+tauri-plugin-updater = "2"
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

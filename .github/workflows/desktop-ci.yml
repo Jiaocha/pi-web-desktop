@@ -1,0 +1,70 @@
+name: Desktop CI
+
+# PR 阶段的廉价校验：不产出安装包，但验证「Rust 能编译 + 前端能构建 +
+# 运行时载荷可组装」，把发布工作流里最贵的失败提前暴露。
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  PI_WEB_REF: main
+  NODE_VERSION: "22.22.0"
+
+jobs:
+  rust:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Generate app icons (needed by tauri-build)
+        run: |
+          node scripts/make-icon.mjs app-icon.png
+          npm install
+          npx tauri icon app-icon.png -o src-tauri/icons
+      - name: cargo fmt
+        run: cargo fmt --check
+        working-directory: src-tauri
+      - name: cargo check
+        run: cargo check --all-targets
+        working-directory: src-tauri
+
+  payload:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: agegr/pi-web
+          ref: ${{ env.PI_WEB_REF }}
+          path: src-app
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: src-app/package-lock.json
+      - run: npm ci
+        working-directory: src-app
+      - run: npm rebuild node-pty --build-from-source --ignore-scripts=false --foreground-scripts
+        working-directory: src-app
+      - run: npm run build
+        working-directory: src-app
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+      - run: npm prune --omit=dev
+        working-directory: src-app
+      - name: Assemble payload (no Rust build)
+        run: node scripts/prepare-desktop.mjs --target x86_64-pc-windows-msvc --src-app ../src-app
+      - name: Report payload size
+        shell: bash
+        run: du -sh app src-tauri/binaries

@@ -1,0 +1,38 @@
+<!doctype html>
+<!--
+  Placeholder shown by Tauri until the Node sidecar answers on 127.0.0.1.
+  `frontendDist` must exist for `tauri build`, but the real UI is served by the
+  sidecar, so this file only ever appears for a second or two.
+-->
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>Pi Web</title>
+    <style>
+      :root { color-scheme: light; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f6f7f9;
+        color: #334155;
+        font: 14px/1.5 system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+      }
+      .spinner {
+        width: 28px;
+        height: 28px;
+        margin-right: 12px;
+        border: 3px solid #cbd5e1;
+        border-top-color: #2563eb;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+  </head>
+  <body>
+    <div class="spinner"></div>
+    <span>正在启动本地服务…</span>
+  </body>
+</html>

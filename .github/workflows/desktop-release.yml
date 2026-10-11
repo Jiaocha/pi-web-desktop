@@ -1,0 +1,138 @@
+name: Desktop release
+
+# 所有桌面产物（NSIS 安装包 + updater 签名 + latest.json）都在 CI 产出，
+# 本地只写代码。打 tag 触发；手动触发可控制是否直接发布。
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish the GitHub release (false = draft only)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+env:
+  # 锁定 Pi Web 源码版本；升级前端时改这里（建议用 tag 而不是分支）。
+  PI_WEB_REF: main
+  NODE_VERSION: "22.22.0"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bundles: nsis
+          # macOS（配置好签名/notarize 后启用）：
+          # - os: macos-latest
+          #   target: aarch64-apple-darwin
+          #   bundles: dmg
+          # - os: macos-13
+          #   target: x86_64-apple-darwin
+          #   bundles: dmg
+          # Windows ARM64（windows-11-arm runner，公开预览）：
+          # - os: windows-11-arm
+          #   target: aarch64-pc-windows-msvc
+          #   bundles: nsis
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout desktop shell
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout Pi Web (app source)
+        uses: actions/checkout@v4
+        with:
+          repository: agegr/pi-web
+          ref: ${{ env.PI_WEB_REF }}
+          path: src-app
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: src-app/package-lock.json
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # tauri-plugin-updater 要求 Rust >= 1.90
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install Tauri CLI
+        # 仓库只提交 package.json（无 lock），提交 lock 后可改回 npm ci。
+        run: npm install
+
+      - name: Install app dependencies
+        run: npm ci
+        working-directory: src-app
+
+      - name: Rebuild node-pty (Windows)
+        # node-pty 1.2.0-beta.15 只带 Linux 预编译包；Windows runner 自带
+        # MSVC Build Tools，可直接源码构建。缺失会在打开终端时才炸，必须早暴露。
+        if: runner.os == 'Windows'
+        run: npm rebuild node-pty --build-from-source --ignore-scripts=false --foreground-scripts
+        working-directory: src-app
+
+      - name: Build Next.js
+        run: npm run build
+        working-directory: src-app
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
+      - name: Drop dev dependencies
+        run: npm prune --omit=dev
+        working-directory: src-app
+
+      - name: Assemble runtime payload + Node sidecar
+        run: node scripts/prepare-desktop.mjs --target ${{ matrix.target }} --node-version ${{ env.NODE_VERSION }} --src-app ../src-app
+
+      - name: Generate app icons
+        # 仓库不提交二进制图标；有真实品牌图时替换 app-icon.png 并提交即可。
+        run: |
+          node scripts/make-icon.mjs app-icon.png
+          npx tauri icon app-icon.png -o src-tauri/icons
+
+      - name: Build and release (Tauri)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: .
+          tauriScript: npm run tauri
+          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+          tagName: v__VERSION__
+          releaseName: "Pi Web Desktop v__VERSION__"
+          releaseBody: "Pi Web 桌面版自动构建产物。"
+          # tag push 一律出草稿，人工验收后再手动发布；手动触发时按输入决定。
+          releaseDraft: ${{ github.event_name == 'push' || !inputs.publish }}
+          includeUpdaterJson: true
+          updaterJsonPreferNsis: true
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pi-web-desktop-${{ matrix.target }}
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
+            src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.sig
+          if-no-files-found: error
