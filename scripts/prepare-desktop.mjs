@@ -28,9 +28,17 @@ const projectDir = path.resolve(scriptDir, "..");
 function parseArgs(argv) {
   // src-app is a subdirectory of this project (CI checks Pi Web out into it,
   // locally you clone or submodule it there).
-  const args = { target: "", srcApp: "src-app", nodeVersion: "22.22.0" };
-  const flags = { "--target": "target", "--src-app": "srcApp", "--node-version": "nodeVersion" };
+  const args = { target: "", srcApp: "src-app", nodeVersion: "22.22.0", runtimeOnly: false };
+  const flags = {
+    "--target": "target",
+    "--src-app": "srcApp",
+    "--node-version": "nodeVersion",
+  };
   for (let i = 0; i < argv.length; i += 1) {
+    if (argv[i] === "--runtime-only") {
+      args.runtimeOnly = true;
+      continue;
+    }
     const key = flags[argv[i]];
     if (key && argv[i + 1]) {
       args[key] = argv[i + 1];
@@ -210,6 +218,14 @@ async function main() {
   console.log(`target=${args.target} node=v${args.nodeVersion} src=${path.relative(projectDir, srcAppDir)}`);
 
   await installNodeRuntime(args.target, args.nodeVersion, binariesDir);
+
+  // tauri-build resolves bundle.externalBin at compile time, so a Rust-only
+  // job (cargo check) needs the sidecar even when no payload is assembled.
+  if (args.runtimeOnly) {
+    console.log("✓ runtime-only: skipped payload assembly");
+    return;
+  }
+
   assembleApp(srcAppDir, appDir);
   assertNativePty(appDir, args.target);
 

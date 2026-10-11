@@ -31,6 +31,8 @@ jobs:
           node scripts/make-icon.mjs app-icon.png
           npm install
           npx tauri icon app-icon.png -o src-tauri/icons
+      - name: Install Node sidecar (externalBin must exist at compile time)
+        run: node scripts/prepare-desktop.mjs --target x86_64-pc-windows-msvc --runtime-only
       - name: cargo fmt
         run: cargo fmt --check
         working-directory: src-tauri
