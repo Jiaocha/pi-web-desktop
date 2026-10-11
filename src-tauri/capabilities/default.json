@@ -4,7 +4,9 @@
   "description": "Pi Web Desktop: filesystem and terminal access stay in the Node sidecar, so the frontend gets no fs/shell permissions.",
   "windows": ["main"],
   "local": true,
-  "remote": ["http://127.0.0.1:*/*"],
+  "remote": {
+    "urls": ["http://127.0.0.1:*/*"]
+  },
   "permissions": [
     "core:default",
     "core:window:allow-minimize",

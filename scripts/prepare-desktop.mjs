@@ -26,7 +26,9 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const projectDir = path.resolve(scriptDir, "..");
 
 function parseArgs(argv) {
-  const args = { target: "", srcApp: "../src-app", nodeVersion: "22.22.0" };
+  // src-app is a subdirectory of this project (CI checks Pi Web out into it,
+  // locally you clone or submodule it there).
+  const args = { target: "", srcApp: "src-app", nodeVersion: "22.22.0" };
   const flags = { "--target": "target", "--src-app": "srcApp", "--node-version": "nodeVersion" };
   for (let i = 0; i < argv.length; i += 1) {
     const key = flags[argv[i]];

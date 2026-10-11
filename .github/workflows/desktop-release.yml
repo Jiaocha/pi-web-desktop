@@ -102,7 +102,7 @@ jobs:
         working-directory: src-app
 
       - name: Assemble runtime payload + Node sidecar
-        run: node scripts/prepare-desktop.mjs --target ${{ matrix.target }} --node-version ${{ env.NODE_VERSION }} --src-app ../src-app
+        run: node scripts/prepare-desktop.mjs --target ${{ matrix.target }} --node-version ${{ env.NODE_VERSION }}
 
       - name: Generate app icons
         # 仓库不提交二进制图标；有真实品牌图时替换 app-icon.png 并提交即可。

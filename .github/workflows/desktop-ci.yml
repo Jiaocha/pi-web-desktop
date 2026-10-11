@@ -64,7 +64,7 @@ jobs:
       - run: npm prune --omit=dev
         working-directory: src-app
       - name: Assemble payload (no Rust build)
-        run: node scripts/prepare-desktop.mjs --target x86_64-pc-windows-msvc --src-app ../src-app
+        run: node scripts/prepare-desktop.mjs --target x86_64-pc-windows-msvc
       - name: Report payload size
         shell: bash
         run: du -sh app src-tauri/binaries
