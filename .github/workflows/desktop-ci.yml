@@ -33,6 +33,9 @@ jobs:
           npx tauri icon app-icon.png -o src-tauri/icons
       - name: Install Node sidecar (externalBin must exist at compile time)
         run: node scripts/prepare-desktop.mjs --target x86_64-pc-windows-msvc --runtime-only
+      - name: Create payload placeholder (bundle.resources must exist at compile time)
+        shell: bash
+        run: mkdir -p app && printf 'placeholder for cargo check\n' > app/.placeholder
       - name: cargo fmt
         run: cargo fmt --check
         working-directory: src-tauri
