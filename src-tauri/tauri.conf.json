@@ -38,8 +38,7 @@
         "languages": ["SimpChinese", "English"],
         "displayLanguageSelector": true,
         "installMode": "currentUser",
-        "createDesktopShortcut": true,
-        "createStartMenuShortcut": true
+        "startMenuFolder": "Pi Web"
       }
     }
   },

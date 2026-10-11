@@ -1,0 +1,33 @@
+name: probe-msvc
+
+# 临时探针：确认哪个 Windows runner 镜像能源码构建 node-pty。
+# 结论确定后删除本文件。
+on: workflow_dispatch
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.0"
+      - name: Report image
+        run: |
+          echo "runner=$env:RUNNER_OS"
+          Get-ChildItem "C:\Program Files\Microsoft Visual Studio" -ErrorAction SilentlyContinue
+          Get-ChildItem "C:\Program Files (x86)\Microsoft Visual Studio" -ErrorAction SilentlyContinue
+        shell: pwsh
+      - name: Install node-pty (runs its install script)
+        run: |
+          npm init -y
+          npm install node-pty@1.2.0-beta.15
+      - name: Verify native binary
+        shell: bash
+        run: |
+          ls -R node_modules/node-pty/build node_modules/node-pty/prebuilds 2>/dev/null || true
+          node -e "const p=require('node-pty'); console.log('pty loaded', Object.keys(p).join(','))"
