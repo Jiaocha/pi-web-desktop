@@ -1,7 +1,7 @@
 # Pi Web 桌面化 · 编程实施计划
 
 > 目标：把 Pi Web（全栈 Next.js）以 Tauri v2 壳 + Node sidecar 的形式发布为 Windows 桌面应用，全流程在 GitHub Actions 构建。
-> 计划状态：**待确认**。确认后按第 4 节顺序执行，每个子任务独立提交、CI 验证、记录结果。
+> 计划状态：**已确认并执行中**（D1–D4 已定）。M1 首个包已产出但**启动失败**，已定位并修复，正在出 v0.12.1。
 
 ---
 
@@ -12,7 +12,7 @@
 | 仓库 | `Jiaocha/pi-web-desktop`（私有），本地副本 `pi-web-temp/desktop/`，工作区干净 |
 | 提交 | 7 次提交，最新 `20744a7` |
 | CI | `Desktop CI` 最后一次 **success**（rust: `cargo fmt` + `cargo check`；payload: 载荷组装） |
-| 架构 | Tauri 壳 → 动态端口 → `node.exe bin/pi-web.js start` sidecar → WebView2 指向 `http://127.0.0.1:<port>` |
+| 架构 | Tauri 壳 → 动态端口 → `node.exe bin/pi-web.js -H 127.0.0.1 -p <port> --no-open` sidecar → WebView2 指向 `http://127.0.0.1:<port>`（**pi-web CLI 没有 `start` 子命令**，裸 `pi-web [options]` 即启动服务） |
 | 窗口 | `src-tauri/src/lib.rs:53` 已设为 `.decorations(false)`（无边框）→ **必须有拖拽区，否则窗口不可移动** |
 | 载荷 | `npm prune --omit=dev` 后 `app/` = **511.4MB**（`node_modules` 476.2MB） |
 | node-pty | 自带 `prebuilds/win32-x64/conpty.node`，普通安装即可用；runner 无 VS，**禁止** `--build-from-source` |
@@ -202,12 +202,17 @@
 | T3 密钥 | ✅ | `tauri signer generate`（本机一次性；私钥在 `~/.tauri/pi-web-desktop.key`，无密码）；pubkey 已填入 `tauri.conf.json`；`TAURI_SIGNING_PRIVATE_KEY` 已写入仓库 Secret | `gh secret list` 确认 |
 | T3 首次出包 | ✅ | `git tag v0.12.0` → `Desktop release` 24 分钟跑完 | 草稿 Release 含：`Pi.Web.Desktop_0.12.0_x64-setup.exe`（**98.7MB**）、`.sig`、`latest.json`；**latest.json 签名与 .sig 完全一致**（已脚本比对） |
 | T8 载荷瘦身 | ⬜ | 未开始（先出包再瘦身） | 实测安装包 98.7MB，在 70–120MB 预估区间内；瘦身目标改为缩小安装后占用与更新下载量 |
+| T4 人工验收 | ❌→🔧 | — | **首次安装后无法启动**。本机复现 `pi-web-desktop.exe` 拿到 sidecar stderr：`Error: EISDIR ... lstat 'D:'`；手工跑 `node bin/pi-web.js start` → `Unexpected argument(s): start`。**根因：pi-web CLI 无 `start` 子命令**，node 启动即退出 1，健康检查白等 30s，release 构建下错误无处可见（静默退出） |
+| 启动修复 | ✅ | `src-tauri/src/server.rs`：参数改为 `[entry, -H, 127.0.0.1, -p <port>, --no-open]`（去掉 `start`；`--no-open` 同时阻止 CLI 再开系统浏览器）；entry 存在性校验；记录 app dir/entry/port | 本机验证：修正后的调用 `✓ Ready in 364ms`，`curl -I` 返回 **200** |
+| 失败可诊断 | ✅ | 新增 `src-tauri/src/logging.rs`：`ServerLog` 环形缓冲（500 行）+ 落盘 `<app data>/logs/desktop.log`；`lib.rs` 新增 `boot()` / `report_failure()`：失败时写 `logs/startup-failure.txt`、用记事本打开并打开日志目录；`wait_until_ready` 子进程提前退出即带上退出码与输出尾部快速失败 | 静默退出问题消除 |
+| 开发者模式 | ✅ | `tray.rs` 托盘新增「开发者工具」（`window.open_devtools()`）与「打开日志目录」；`Cargo.toml` 启用 tauri `devtools` feature（release 也可用）；`PI_WEB_DESKTOP_DEBUG=1` 自动开 DevTools；`PI_WEB_DESKTOP=1` 供前端识别桌面端；`README.md` 新增「开发者模式」章节 | CI `rust`(fmt+check) ✅、`payload` ✅（run 38187756598） |
+| v0.12.1 发布 | 🔄 | 三处版本 0.12.0 → 0.12.1，打 tag `v0.12.1` 触发 `Desktop release` | 构建中 |
 
 ---
 
 ## 7. 遗留问题与下一步
 
-1. **T4 人工验收（阻塞 M1 收尾）**：下载草稿 Release 的 `Pi.Web.Desktop_0.12.0_x64-setup.exe` 安装验证——冷启动无登录页、终端中文/resize、SSE 流式、标题栏按钮（验证 capability `remote` 生效）、退出无残留 node、卸载后 `~/.pi/agent` 保留。
+1. **T4 人工验收（重做，装 v0.12.1）**：装 `Pi.Web.Desktop_0.12.1_x64-setup.exe` 验证——冷启动无登录页、终端中文/resize、SSE 流式、标题栏按钮（验证 capability `remote` 生效）、退出无残留 node、卸载后 `~/.pi/agent` 保留。启动失败时先看 `%LOCALAPPDATA%\com.earendil.pi-web\logs\startup-failure.txt`。**旧的 v0.12.0 草稿（启动有问题的包）建议删除**，避免误装。
 2. **T8 standalone 瘦身**（issue #3）：载荷 511MB → 120–180MB；注意 `serverExternalPackages` 需 `outputFileTracingIncludes` 补回。
 3. **T5 前端适配**（issue #2）：`PI_WEB_DESKTOP=1` 隐藏浏览器 UI + 无边框标题栏（`data-tauri-drag-region`），改完把 `lib.rs` 的 `decorations` 切回 `false`。
 4. **T6/T7**：单实例插件、`tauri-plugin-log` 落盘日志。
