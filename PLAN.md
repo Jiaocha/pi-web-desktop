@@ -1,7 +1,7 @@
 # Pi Web 桌面化 · 编程实施计划
 
 > 目标：把 Pi Web（全栈 Next.js）以 Tauri v2 壳 + Node sidecar 的形式发布为 Windows 桌面应用，全流程在 GitHub Actions 构建。
-> 计划状态：**已确认并执行中**（D1–D4 已定）。M1 首个包已产出但**启动失败**，已定位并修复，正在出 v0.12.1。
+> 计划状态：**已确认并执行中**（D1–D4 已定）。M1 首个包（v0.12.0）启动失败已定位并修复，**v0.12.1 已发布**，待人工验收。
 
 ---
 
@@ -206,7 +206,8 @@
 | 启动修复 | ✅ | `src-tauri/src/server.rs`：参数改为 `[entry, -H, 127.0.0.1, -p <port>, --no-open]`（去掉 `start`；`--no-open` 同时阻止 CLI 再开系统浏览器）；entry 存在性校验；记录 app dir/entry/port | 本机验证：修正后的调用 `✓ Ready in 364ms`，`curl -I` 返回 **200** |
 | 失败可诊断 | ✅ | 新增 `src-tauri/src/logging.rs`：`ServerLog` 环形缓冲（500 行）+ 落盘 `<app data>/logs/desktop.log`；`lib.rs` 新增 `boot()` / `report_failure()`：失败时写 `logs/startup-failure.txt`、用记事本打开并打开日志目录；`wait_until_ready` 子进程提前退出即带上退出码与输出尾部快速失败 | 静默退出问题消除 |
 | 开发者模式 | ✅ | `tray.rs` 托盘新增「开发者工具」（`window.open_devtools()`）与「打开日志目录」；`Cargo.toml` 启用 tauri `devtools` feature（release 也可用）；`PI_WEB_DESKTOP_DEBUG=1` 自动开 DevTools；`PI_WEB_DESKTOP=1` 供前端识别桌面端；`README.md` 新增「开发者模式」章节 | CI `rust`(fmt+check) ✅、`payload` ✅（run 38187756598） |
-| v0.12.1 发布 | 🔄 | 三处版本 0.12.0 → 0.12.1，打 tag `v0.12.1` 触发 `Desktop release` | 构建中 |
+| 开发者模式 + | ✅ | `PI_WEB_DESKTOP_DEV_URL=<url>`：**跳过 sidecar** 直连本地服务，窗口标题带 ` (dev)`；仍 manage 空的 `ServerHandle`，保证 `RunEvent::Exit` 与托盘正常 | CI `rust`+`payload` ✅（run 38189827712）；前端迭代无需重组载荷/重装 |
+| v0.12.1 发布 | ✅ | 三处版本 0.12.0 → 0.12.1，tag `v0.12.1` 触发 `Desktop release`（22m2s） | **已发布**（非草稿）：`Pi.Web.Desktop_0.12.1_x64-setup.exe`（103,545,130 B）+ `.sig` + `latest.json`，签名比对 **True** |
 
 ---
 
