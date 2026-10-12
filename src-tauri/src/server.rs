@@ -19,8 +19,25 @@ pub fn pick_free_port() -> tauri::Result<u16> {
     Ok(listener.local_addr()?.port())
 }
 
+/// Where the Pi Web payload lives. The bundled layout resolves it through
+/// Tauri's resource dir; the portable zip simply keeps `app/` next to the exe,
+/// so try the resource dir first and fall back to the exe directory.
 fn app_dir(app: &AppHandle) -> tauri::Result<PathBuf> {
-    app.path().resolve("app", BaseDirectory::Resource)
+    let entry = |dir: &PathBuf| dir.join("bin").join("pi-web.js");
+
+    if let Ok(dir) = app.path().resolve("app", BaseDirectory::Resource) {
+        if entry(&dir).exists() {
+            return Ok(dir);
+        }
+    }
+    if let Some(dir) = crate::portable::root_dir().map(|root| root.join("app")) {
+        if entry(&dir).exists() {
+            return Ok(dir);
+        }
+    }
+    Err(tauri::Error::Anyhow(anyhow::anyhow!(
+        "pi-web payload not found next to the executable or in the resource dir"
+    )))
 }
 
 /// The shell plugin's error type has no `From` impl into `tauri::Error`.
@@ -44,7 +61,7 @@ pub fn spawn(app: &AppHandle, port: u16, log: &Arc<ServerLog>) -> tauri::Result<
 
     // `pi-web [options]` starts the server; there is no `start` subcommand.
     // --no-open keeps the OS browser from opening on top of the app window.
-    let command = app
+    let mut command = app
         .shell()
         .sidecar("node")
         .map_err(shell_error)?
@@ -63,6 +80,18 @@ pub fn spawn(app: &AppHandle, port: u16, log: &Arc<ServerLog>) -> tauri::Result<
             &port.to_string(),
             "--no-open",
         ]);
+
+    // Portable mode: pi-web keeps every byte of state (sessions, settings, the
+    // run records the CLI writes) under its agent dir, so pointing that into
+    // data/ is what makes the folder self-contained.
+    if let Some(data) = crate::portable::data_dir() {
+        let agent = data.join("pi").join("agent");
+        if let Err(error) = std::fs::create_dir_all(&agent) {
+            logging::write(app, &format!("agent dir {}: {error}", agent.display()));
+        }
+        logging::write(app, &format!("agent dir: {}", agent.display()));
+        command = command.env("PI_CODING_AGENT_DIR", agent.to_string_lossy().as_ref());
+    }
 
     let (mut rx, child) = command.spawn().map_err(shell_error)?;
 

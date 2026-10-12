@@ -1,6 +1,6 @@
 [package]
 name = "pi-web-desktop"
-version = "0.12.1"
+version = "0.13.0"
 description = "Tauri v2 shell that ships Pi Web as a desktop app"
 authors = ["agegr"]
 license = "MIT"

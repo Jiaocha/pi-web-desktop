@@ -46,9 +46,13 @@ impl ServerLog {
     }
 }
 
-/// Log directory: <app data>/logs. Always written, even in release builds,
-/// because a window-less failure is otherwise invisible.
+/// Log directory: `<root>/data/logs` in portable mode, otherwise
+/// `<app data>/logs`. Always written, even in release builds, because a
+/// window-less failure is otherwise invisible.
 pub fn log_dir(app: &AppHandle) -> Option<PathBuf> {
+    if let Some(dir) = crate::portable::data_dir() {
+        return Some(dir.join("logs"));
+    }
     app.path().app_data_dir().ok().map(|dir| dir.join("logs"))
 }
 

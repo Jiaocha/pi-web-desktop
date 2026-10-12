@@ -45,6 +45,37 @@ npm run dev
 本地**不做** release 构建（`cargo build --release` / `tauri build`）——交给 GitHub Actions。
 本机只需 `cargo check`（在 `src-tauri` 目录下）与编辑器。
 
+## 便携版（绿色免安装）
+
+`Desktop release` 在产出 NSIS 安装包的同时，复用同一个已编译的 exe 组装一份 **zip 便携版**：
+解压即可运行，不安装、不写注册表、不需要管理员权限。
+
+```
+Pi-Web-Desktop-<version>-portable-win64/
+├─ Pi Web Desktop.exe            双击启动
+├─ run-debug.bat                 排障入口：开 devtools、保留控制台、打印退出码
+├─ node-x86_64-pc-windows-msvc.exe   内置 Node 运行时（按此名查找，勿改名）
+├─ vcruntime140*.dll             微软 C 运行库（没装 VC++ 运行库的机器也能直接跑）
+├─ app\                          Pi Web 本体（Next.js 产物 + node_modules + bin）
+├─ data\                         运行时全部写入这里：logs / webview / pi\agent
+├─ runtime\                      可选：老机器用的 WebView2 安装器
+├─ portable.txt                  便携模式开关（删掉就退回 %APPDATA%）
+└─ README.txt                    简短说明
+```
+
+**便携模式怎么实现的**：exe 同级有 `portable.txt` 时，外壳把三处路径全部改写到解压目录内——
+
+| 原来 | 便携模式 |
+|---|---|
+| `%APPDATA%\…\logs` | `<root>\data\logs` |
+| WebView2 profile（默认在用户目录） | `<root>\data\webview`（`WebviewWindowBuilder::data_directory`） |
+| `~/.pi\agent`（会话、设置、run records） | `<root>\data\pi\agent`（给 sidecar 传 `PI_CODING_AGENT_DIR`） |
+
+同时便携版**禁用自动更新**（更新要走安装包，会写到 Program Files）。
+
+组装脚本是 `scripts/make-portable.mjs`（`npm run portable -- --target x86_64-pc-windows-msvc`），
+压缩用 7z，缺 7z 时回退 `tar -a`。
+
 ## 开发者模式
 
 | 能力 | 用法 |

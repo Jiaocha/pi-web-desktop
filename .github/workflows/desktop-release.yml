@@ -128,6 +128,41 @@ jobs:
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
 
+      # The portable zip reuses the release binary the bundler just produced,
+      # so it adds no second Rust compile - only assembly and compression.
+      - name: Assemble portable (zip) build
+        shell: bash
+        run: node scripts/make-portable.mjs --target ${{ matrix.target }}
+
+      - name: Report portable runtime dependencies
+        shell: bash
+        run: |
+          python - <<'PY'
+          import pathlib
+          import re
+
+          folder = next(p for p in pathlib.Path("dist").iterdir() if p.is_dir())
+          print("portable folder:", folder.name)
+          for exe in sorted(folder.glob("*.exe")):
+              names = sorted({
+                  m.decode()
+                  for m in re.findall(rb"[A-Za-z0-9_.\-]{4,40}\.[Dd][Ll][Ll]", exe.read_bytes())
+              })
+              third = [n for n in names if re.search(r"(vcruntime|msvcp|concrt|vcomp)", n, re.I)]
+              missing = [n for n in third if not (folder / n).exists()]
+              print(f"  {exe.name}: VC/CRT imports -> {third or 'none'}")
+              if missing:
+                  print(f"    !! missing next to the exe: {missing}")
+          PY
+
+      - name: Upload portable zip to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          gh release upload "v${version}" dist/*.zip --clobber --repo "${{ github.repository }}"
+
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
@@ -135,4 +170,11 @@ jobs:
           path: |
             src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
             src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.sig
+          if-no-files-found: error
+
+      - name: Upload portable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pi-web-desktop-portable-${{ matrix.target }}
+          path: dist/*.zip
           if-no-files-found: error

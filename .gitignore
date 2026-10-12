@@ -5,6 +5,9 @@
 /src-tauri/gen
 /src-tauri/icons
 
+# 便携版组装输出
+/dist
+
 # 图标源图：仓库里放真实品牌图后从下面移除即可提交
 /app-icon.png
 /src-app

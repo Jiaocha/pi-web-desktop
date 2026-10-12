@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 pub mod logging;
+pub mod portable;
 pub mod server;
 pub mod tray;
 pub mod updater;
@@ -92,6 +93,20 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
             logging::write(&handle, "starting Pi Web Desktop");
+            let portable = portable::is_portable();
+            logging::write(&handle, &format!("portable mode: {portable}"));
+            if portable {
+                logging::write(
+                    &handle,
+                    &format!(
+                        "portable root: {}",
+                        portable::root_dir().map_or_else(
+                            || "<unknown>".to_string(),
+                            |root| root.display().to_string()
+                        )
+                    ),
+                );
+            }
 
             match boot(&handle) {
                 Ok(url) => {
@@ -99,7 +114,7 @@ pub fn run() {
                     // Phase 1 (M1): keep the system titlebar. The frameless
                     // variant needs a frontend titlebar with
                     // data-tauri-drag-region (PLAN.md T5).
-                    tauri::WebviewWindowBuilder::new(
+                    let mut builder = tauri::WebviewWindowBuilder::new(
                         &handle,
                         "main",
                         tauri::WebviewUrl::External(url.parse()?),
@@ -112,8 +127,15 @@ pub fn run() {
                     .inner_size(1280.0, 850.0)
                     .min_inner_size(900.0, 620.0)
                     .decorations(true)
-                    .visible(true)
-                    .build()?;
+                    .visible(true);
+
+                    // Portable: keep the WebView2 profile (cookies,
+                    // localStorage) inside the folder next to the exe instead
+                    // of %APPDATA%.
+                    if let Some(data) = portable::data_dir() {
+                        builder = builder.data_directory(data.join("webview"));
+                    }
+                    builder.build()?;
 
                     // devtools feature is enabled, so this works in release too.
                     if debug_enabled() {
@@ -123,7 +145,15 @@ pub fn run() {
                     }
 
                     tray::build(&handle)?;
-                    updater::check(&handle);
+                    // The updater installs an NSIS package, which a portable
+                    // copy cannot accept: it would write to Program Files and
+                    // clobber a folder the user never installed. Portable users
+                    // re-download the zip.
+                    if portable {
+                        logging::write(&handle, "updater skipped: portable build");
+                    } else {
+                        updater::check(&handle);
+                    }
                 }
                 Err(error) => {
                     report_failure(&handle, &format!("{error}"));
