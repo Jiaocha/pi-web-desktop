@@ -1,17 +1,61 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+pub mod logging;
 pub mod server;
 pub mod tray;
 pub mod updater;
 
-use std::sync::Mutex;
+use std::fs;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use tauri::{Manager, RunEvent};
 use tauri_plugin_shell::process::CommandChild;
 
-/// Holds the sidecar handle so it can be killed before the process exits.
-/// Without this, closing the window leaves `node.exe` running in the background.
-pub struct ServerHandle(pub Mutex<Option<CommandChild>>);
+use logging::ServerLog;
+
+/// Holds the sidecar handle and its log ring so both can be killed on exit
+/// and reported on failure.
+pub struct ServerHandle(pub Mutex<Option<CommandChild>>, pub Arc<ServerLog>);
+
+/// PI_WEB_DESKTOP_DEBUG=1 opens devtools on startup; the log file is always
+/// written, so diagnostics work in release builds too.
+fn debug_enabled() -> bool {
+    matches!(
+        std::env::var("PI_WEB_DESKTOP_DEBUG").ok().as_deref(),
+        Some(value) if !value.is_empty() && value != "0"
+    )
+}
+
+fn boot(app: &tauri::AppHandle) -> tauri::Result<String> {
+    let port = server::pick_free_port()?;
+    let url = format!("http://127.0.0.1:{port}");
+    let log = Arc::new(ServerLog::new());
+
+    let child = server::spawn(app, port, &log)?;
+    app.manage(ServerHandle(Mutex::new(Some(child)), log.clone()));
+
+    server::wait_until_ready(app, &url, Duration::from_secs(30), &log)?;
+    Ok(url)
+}
+
+fn report_failure(app: &tauri::AppHandle, error: &str) {
+    logging::write(app, &format!("startup failed: {error}"));
+    eprintln!("startup failed: {error}");
+
+    let Some(dir) = logging::log_dir(app) else {
+        return;
+    };
+    if fs::create_dir_all(&dir).is_err() {
+        return;
+    }
+    let file = dir.join("startup-failure.txt");
+    if fs::write(&file, error).is_ok() {
+        // Notepad + Explorer: a modal dialog inside setup would block before
+        // the event loop exists, and a silent exit is what cost us a release.
+        logging::reveal(app, &file);
+    }
+}
 
 pub fn run() {
     let app = tauri::Builder::default()
@@ -20,7 +64,6 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .manage(ServerHandle(Mutex::new(None)))
         // Closing the window hides it to the tray: exiting here would abort
         // running agent sessions. The tray's "退出" is the real exit path.
         .on_window_event(|window, event| {
@@ -31,44 +74,41 @@ pub fn run() {
         })
         .setup(|app| {
             let handle = app.handle().clone();
+            logging::write(&handle, "starting Pi Web Desktop");
 
-            // 1. Pick a free loopback port; the port cannot be hardcoded
-            //    because a Pi Web dev server may already own 30141.
-            let port = server::pick_free_port()?;
-            let url = format!("http://127.0.0.1:{port}");
+            match boot(&handle) {
+                Ok(url) => {
+                    logging::write(&handle, &format!("window url: {url}"));
+                    // Phase 1 (M1): keep the system titlebar. The frameless
+                    // variant needs a frontend titlebar with
+                    // data-tauri-drag-region (PLAN.md T5).
+                    tauri::WebviewWindowBuilder::new(
+                        &handle,
+                        "main",
+                        tauri::WebviewUrl::External(url.parse()?),
+                    )
+                    .title("Pi Web")
+                    .inner_size(1280.0, 850.0)
+                    .min_inner_size(900.0, 620.0)
+                    .decorations(true)
+                    .visible(true)
+                    .build()?;
 
-            // 2. Start the Next.js server through the official launcher.
-            let child = server::spawn(&handle, port)?;
-            handle
-                .state::<ServerHandle>()
-                .0
-                .lock()
-                .expect("server handle mutex")
-                .replace(child);
+                    // devtools feature is enabled, so this works in release too.
+                    if debug_enabled() {
+                        if let Some(window) = handle.get_webview_window("main") {
+                            window.open_devtools();
+                        }
+                    }
 
-            // 3. Wait until it accepts connections before showing a window.
-            server::wait_until_ready(&url, std::time::Duration::from_secs(30))?;
-
-            // 4. Create the real window pointed at the sidecar.
-            tauri::WebviewWindowBuilder::new(
-                &handle,
-                "main",
-                tauri::WebviewUrl::External(url.parse()?),
-            )
-            .title("Pi Web")
-            .inner_size(1280.0, 850.0)
-            .min_inner_size(900.0, 620.0)
-            // Phase 1 (M1): keep the system titlebar. The frameless variant
-            // needs a frontend titlebar with data-tauri-drag-region, which is
-            // tracked separately (PLAN.md T5).
-            .decorations(true)
-            .visible(true)
-            .build()?;
-
-            tray::build(&handle)?;
-
-            // 5. Update check; never blocks startup.
-            updater::check(&handle);
+                    tray::build(&handle)?;
+                    updater::check(&handle);
+                }
+                Err(error) => {
+                    report_failure(&handle, &format!("{error}"));
+                    handle.exit(1);
+                }
+            }
 
             Ok(())
         })

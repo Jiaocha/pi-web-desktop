@@ -44,6 +44,20 @@ npm run dev
 本地**不做** release 构建（`cargo build --release` / `tauri build`）——交给 GitHub Actions。
 本机只需 `cargo check`（在 `src-tauri` 目录下）与编辑器。
 
+## 开发者模式
+
+| 能力 | 用法 |
+|---|---|
+| 启动日志 | **始终写入** `<app data>/logs/desktop.log`（含 app 目录、入口路径、端口、sidecar 全部输出、就绪/失败） |
+| 启动失败报告 | 失败时写 `logs/startup-failure.txt` 并自动用记事本打开 + 打开日志目录（不再静默退出） |
+| 日志目录 | 托盘右键 → 「打开日志目录」 |
+| 开发者工具 | 托盘右键 → 「开发者工具」（已启用 `devtools` 特性，release 版同样可用）；或启动时设 `PI_WEB_DESKTOP_DEBUG=1` 自动打开 |
+| 环境变量 | `PI_WEB_DESKTOP_DEBUG=1`（自动开 devtools）、`PI_WEB_DESKTOP=1`（传给 sidecar，供前端识别桌面端） |
+
+日志目录实际路径：`%LOCALAPPDATA%\<identifier>\logs`（Windows，identifier 见 `tauri.conf.json`）。
+
+排障顺序：启动无窗口 → 打开日志目录 → 看 `desktop.log` 末尾与 `startup-failure.txt` → 常见原因是 sidecar 参数或 `app/` 载荷缺失。
+
 ## 发布（GitHub Actions）
 
 一次性准备：

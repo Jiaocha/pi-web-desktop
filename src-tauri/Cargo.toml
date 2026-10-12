@@ -16,8 +16,9 @@ crate-type = ["lib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-# tray-icon is required for TrayIconBuilder.
-tauri = { version = "2", features = ["tray-icon"] }
+# tray-icon for TrayIconBuilder; devtools so the "开发者工具" tray item
+# also works in release builds (local-only app, no remote content).
+tauri = { version = "2", features = ["tray-icon", "devtools"] }
 # Shell spawns the Node sidecar; process allows relaunch after an update.
 tauri-plugin-shell = "2"
 tauri-plugin-process = "2"
