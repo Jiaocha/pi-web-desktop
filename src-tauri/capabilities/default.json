@@ -23,16 +23,6 @@
     "opener:default",
     "process:allow-exit",
     "process:allow-restart",
-    "updater:default",
-    {
-      "identifier": "shell:allow-execute",
-      "allow": [
-        {
-          "name": "binaries/node",
-          "sidecar": true,
-          "args": true
-        }
-      ]
-    }
+    "updater:default"
   ]
 }

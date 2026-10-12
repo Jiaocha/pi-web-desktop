@@ -78,7 +78,7 @@ fn open_logs(app: &AppHandle) {
 
 fn shutdown(app: &AppHandle) {
     let state = app.state::<ServerHandle>();
-    if let Some(child) = state.0.lock().ok().and_then(|mut guard| guard.take()) {
+    if let Some(mut child) = state.0.lock().ok().and_then(|mut guard| guard.take()) {
         let _ = child.kill();
     }
     app.exit(0);

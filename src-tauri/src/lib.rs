@@ -7,17 +7,17 @@ pub mod tray;
 pub mod updater;
 
 use std::fs;
+use std::process::Child;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use tauri::{Manager, RunEvent};
-use tauri_plugin_shell::process::CommandChild;
 
 use logging::ServerLog;
 
 /// Holds the sidecar handle and its log ring so both can be killed on exit
 /// and reported on failure.
-pub struct ServerHandle(pub Mutex<Option<CommandChild>>, pub Arc<ServerLog>);
+pub struct ServerHandle(pub Mutex<Option<Child>>, pub Arc<ServerLog>);
 
 /// PI_WEB_DESKTOP_DEBUG=1 opens devtools on startup; the log file is always
 /// written, so diagnostics work in release builds too.
@@ -77,7 +77,6 @@ fn report_failure(app: &tauri::AppHandle, error: &str) {
 
 pub fn run() {
     let app = tauri::Builder::default()
-        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
@@ -174,7 +173,7 @@ pub fn run() {
                 let state = app_handle.state::<ServerHandle>();
                 state.0.lock().ok().and_then(|mut guard| guard.take())
             };
-            if let Some(child) = child {
+            if let Some(mut child) = child {
                 let _ = child.kill();
             }
         }

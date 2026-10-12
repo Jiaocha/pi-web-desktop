@@ -14,13 +14,23 @@ crate-type = ["lib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+# Workaround, not a real dependency: schemars 0.8.22 declares `indexmap 1.2`
+# without the "std" feature, and indexmap 1.x only gives IndexMap's S
+# parameter a default type under `has_std` - so tauri-build fails to compile
+# with "expected 3 generic arguments". It has to sit in build-dependencies
+# because that is where schemars is used: resolver v2 resolves features for
+# build dependencies separately from normal ones.
+# Remove once schemars ships a fixed release.
+indexmap = { version = "1", features = ["std"] }
 
 [dependencies]
 # tray-icon for TrayIconBuilder; devtools so the "开发者工具" tray item
 # also works in release builds (local-only app, no remote content).
 tauri = { version = "2", features = ["tray-icon", "devtools"] }
-# Shell spawns the Node sidecar; process allows relaunch after an update.
-tauri-plugin-shell = "2"
+# The Node sidecar is spawned with std::process::Command: Tauri resolves
+# sidecar paths to verbatim `\\?\...` paths, which CreateProcessW rejects on
+# non-ASCII install paths (os error 2).
+# tauri-plugin-shell = "2"
 tauri-plugin-process = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
