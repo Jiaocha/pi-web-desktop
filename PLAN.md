@@ -245,7 +245,7 @@
 | 修复 P1-3 单实例 | ✅ | `Cargo.toml` 加 `tauri-plugin-single-instance`；`lib.rs` 注册 `init(|app,..|)` → 拉起已有窗口（unminimize/show/set_focus） | 本机 release exe 连开 **3 次**：进程数 2→3 后不再增加，日志只有 **1 条** `starting Pi Web Desktop` |
 | 修复 P1-4 进程树清理 | ✅ | `server.rs` 新增 `kill_tree()`：Windows 走 `taskkill /F /T /PID`（`Child::kill()` 只杀直接子进程，Next.js worker 会残留并占住端口）；`lib.rs` `RunEvent::Exit` 与 `tray.rs`「退出」都改用它 | 本机验证 `taskkill /F /T` 对 node 父子进程：存活数 **2 → 0** |
 | 修复 P2 健壮性 | ✅ | `lib.rs` `boot()`：端口竞态最多重试 3 次（仅当 **5 秒内快速失败**，慢失败不重试）；`logging.rs` 时间戳改 `YYYY-MM-DD HH:MM:SSZ`（Hinnant `civil_from_days`，不引日期库）；`logging.rs::reveal` 支持目录（Explorer 打开，不再让记事本报「找不到文件」）；`tray.rs` 「打开日志目录」传目录本身；`tauri.conf.json` `beforeDevCommand` 修正为 `src-app`；CI 去掉未使用的 `clippy` 组件 | `cargo fmt --check` + `cargo check --all-targets` + `cargo build --release` 全通过；日志实测 `[2026-10-12 06:17:26Z] starting Pi Web Desktop` |
-| 版本 0.13.1 | ⬜ | `Cargo.toml` / `tauri.conf.json` / `package.json` 三处 0.13.0 → 0.13.1（`Cargo.lock` 已同步） | 待打 tag `v0.13.1` 触发 `Desktop release`（约 24 分钟），替换线上仍是修复前构建的 v0.13.0 产物 |
+| v0.13.1 发布 | ✅ | `Cargo.toml` / `tauri.conf.json` / `package.json` / `Cargo.lock` 四处 0.13.0 → 0.13.1，tag `v0.13.1` 触发 `Desktop release`（17m8s） | **已发布**（run 38212996686）：`Pi.Web.Desktop_0.13.1_x64-setup.exe`（98.6MB）+ `.sig` + `latest.json` + `Pi-Web-Desktop-0.13.1-portable-win64.zip`（179.5MB）；两 exe 的 VC/CRT imports 均为 **none**；`latest.json` signature 与 `.sig` **逐字节一致**，已收敛到 0.13.1。损坏的 **v0.13.0 已转回草稿** |
 
 ---
 
