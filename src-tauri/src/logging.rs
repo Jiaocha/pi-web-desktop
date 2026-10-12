@@ -1,6 +1,6 @@
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command as StdCommand;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -56,13 +56,38 @@ pub fn log_dir(app: &AppHandle) -> Option<PathBuf> {
     app.path().app_data_dir().ok().map(|dir| dir.join("logs"))
 }
 
+/// Days since 1970-01-01 -> (year, month, day). Howard Hinnant's
+/// `civil_from_days`; UTC only, which is fine for correlating logs - and it
+/// keeps the binary free of a date/time dependency.
+fn civil_from_days(days: i64) -> (i64, u32, u32) {
+    let z = days + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let year = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
+    (if month <= 2 { year + 1 } else { year }, month, day)
+}
+
 fn timestamp() -> String {
     let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_secs())
         .unwrap_or_default();
-    // Whole-second UTC is enough to correlate with the sidecar's own output.
-    format!("{secs}")
+    let (year, month, day) = civil_from_days((secs / 86_400) as i64);
+    let time = secs % 86_400;
+    format!(
+        "{:04}-{:02}-{:02} {:02}:{:02}:{:02}Z",
+        year,
+        month,
+        day,
+        time / 3600,
+        time % 3600 / 60,
+        time % 60
+    )
 }
 
 /// Appends one line to `<log dir>/desktop.log`, creating the directory on
@@ -83,9 +108,14 @@ pub fn write(app: &AppHandle, line: &str) {
 }
 
 /// Opens a file with the OS default handler (detached). Rust-side, so it needs
-/// no capability: the frontend never triggers it.
-pub fn reveal(app: &AppHandle, file: &PathBuf) {
-    let _ = StdCommand::new("notepad.exe").arg(file).spawn();
+/// no capability: the frontend never triggers it. A directory opens in
+/// Explorer only - Notepad would just complain about it.
+pub fn reveal(app: &AppHandle, path: &Path) {
+    if path.is_dir() {
+        let _ = StdCommand::new("explorer.exe").arg(path).spawn();
+        return;
+    }
+    let _ = StdCommand::new("notepad.exe").arg(path).spawn();
     if let Some(dir) = log_dir(app) {
         let _ = StdCommand::new("explorer.exe").arg(dir).spawn();
     }

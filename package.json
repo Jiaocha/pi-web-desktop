@@ -1,6 +1,6 @@
 {
   "name": "pi-web-desktop",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "private": true,
   "description": "Tauri v2 shell that ships Pi Web as a desktop app",
   "license": "MIT",

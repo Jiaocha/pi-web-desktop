@@ -4,7 +4,7 @@ use tauri::{
     AppHandle, Manager,
 };
 
-use crate::{logging, ServerHandle};
+use crate::{logging, server, ServerHandle};
 
 const SHOW: &str = "show";
 const DEVTOOLS: &str = "devtools";
@@ -73,13 +73,17 @@ fn open_logs(app: &AppHandle) {
     if std::fs::create_dir_all(&dir).is_err() {
         return;
     }
-    logging::reveal(app, &dir.join("desktop.log"));
+    // The menu item says "open log directory", so open the directory itself
+    // rather than desktop.log, which may not exist yet on a fresh install.
+    logging::reveal(app, &dir);
 }
 
 fn shutdown(app: &AppHandle) {
     let state = app.state::<ServerHandle>();
     if let Some(mut child) = state.0.lock().ok().and_then(|mut guard| guard.take()) {
-        let _ = child.kill();
+        // Kill the workers too, not just the direct child: otherwise node.exe
+        // lingers and the next launch cannot bind the port.
+        server::kill_tree(app, &mut child);
     }
     app.exit(0);
 }

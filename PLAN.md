@@ -239,6 +239,13 @@
 | 启动修复② | ✅ | **根因：Tauri `path().resolve()` 返回 `\\?\` 规范化路径，作为程序名传给 `CreateProcessW` 被拒（os error 2）**。`server.rs` 改为自己解析 node 运行时与 payload、剥掉 `\\?\` 前缀，用 `std::process::Command` 启动（Windows 加 `CREATE_NO_WINDOW`）；退出检测改用 `Child::try_wait()`；stdout/stderr 用线程泵进日志环；移除 `tauri-plugin-shell` 与对应 capability | 本机实测：带 `\\?\` spawn → `[WinError 2] 系统找不到指定的文件。`（与现场报错逐字一致），去掉前缀即成功。本地 release exe 放进真实便携目录：`✓ Ready in ~340ms`，8→64s 全程 `HTTP 200`；`data/{logs,webview,pi/agent}` 全在解压目录内 |
 | 构建修复③ | ✅ | `schemars 0.8.22` 声明 `indexmap 1.x` 但没开 `std` feature → `IndexMap` 的 `S` 无默认类型 → `tauri-build` 编译失败。**必须写在 `[build-dependencies]`**（resolver v2 下构建依赖特性独立解析）；同时提交 `Cargo.lock` 防止 CI 再解析到坏组合 | 本地与 CI（run 38200856766）均通过 |
 | 本地构建流程 | ✅ | Rust 1.96 可用：`mkdir app` + 拷 `src-tauri/binaries/node-<triple>.exe` + `npm install` + `node scripts/make-icon.mjs` + `npx tauri icon` + `cargo build --release`（7m19s）。crates.io 慢时需 `CARGO_HTTP_LOW_SPEED_LIMIT=0 CARGO_HTTP_TIMEOUT=600` | **不消耗 GitHub 额度**即可产出可用 exe，已直接替换 `D:\IDM\压缩\...` 里的 exe |
+| T14 全面检查 | ✅ | 逐模块核对启动链路、便携版、进程/日志、更新、CI 配置，产出 `AUDIT-2026-10-12.md`（模块 → 检查项 → 状态 → 问题位置 → 修复优先级） | 9 项待修：P0 更新端点 404 + 线上产物是修复前构建；P1 双实例/进程残留/静默失败；P2 路径与健壮性 |
+| 修复 P0-2 更新端点 | ✅ | 仓库 `Jiaocha/pi-web-desktop` 由 private 转 **public**（`gh repo edit --visibility public --accept-visibility-change-consequences`） | 匿名 `curl .../releases/latest/download/latest.json` → **HTTP 200**，可读 JSON（version 0.13.0，signature 存在）；`/releases/latest` 页面 200 |
+| 修复 P1-5 失败可诊断 | ✅ | `lib.rs`：窗口/DevTools/托盘/更新器构建包进 `tauri::Result` 闭包，失败时写 `startup-failure.txt` + `exit(1)`（原来 `?` 冒泡 → release 静默退出）；`url.parse()` 经 `anyhow::Error::from` 转换 | `cargo check` ✅；release 下任何构建失败都会留痕 |
+| 修复 P1-3 单实例 | ✅ | `Cargo.toml` 加 `tauri-plugin-single-instance`；`lib.rs` 注册 `init(|app,..|)` → 拉起已有窗口（unminimize/show/set_focus） | 本机 release exe 连开 **3 次**：进程数 2→3 后不再增加，日志只有 **1 条** `starting Pi Web Desktop` |
+| 修复 P1-4 进程树清理 | ✅ | `server.rs` 新增 `kill_tree()`：Windows 走 `taskkill /F /T /PID`（`Child::kill()` 只杀直接子进程，Next.js worker 会残留并占住端口）；`lib.rs` `RunEvent::Exit` 与 `tray.rs`「退出」都改用它 | 本机验证 `taskkill /F /T` 对 node 父子进程：存活数 **2 → 0** |
+| 修复 P2 健壮性 | ✅ | `lib.rs` `boot()`：端口竞态最多重试 3 次（仅当 **5 秒内快速失败**，慢失败不重试）；`logging.rs` 时间戳改 `YYYY-MM-DD HH:MM:SSZ`（Hinnant `civil_from_days`，不引日期库）；`logging.rs::reveal` 支持目录（Explorer 打开，不再让记事本报「找不到文件」）；`tray.rs` 「打开日志目录」传目录本身；`tauri.conf.json` `beforeDevCommand` 修正为 `src-app`；CI 去掉未使用的 `clippy` 组件 | `cargo fmt --check` + `cargo check --all-targets` + `cargo build --release` 全通过；日志实测 `[2026-10-12 06:17:26Z] starting Pi Web Desktop` |
+| 版本 0.13.1 | ⬜ | `Cargo.toml` / `tauri.conf.json` / `package.json` 三处 0.13.0 → 0.13.1（`Cargo.lock` 已同步） | 待打 tag `v0.13.1` 触发 `Desktop release`（约 24 分钟），替换线上仍是修复前构建的 v0.13.0 产物 |
 
 ---
 

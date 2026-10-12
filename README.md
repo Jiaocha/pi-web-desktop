@@ -86,8 +86,10 @@ Pi-Web-Desktop-<version>-portable-win64/
 | 开发者工具 | 托盘右键 → 「开发者工具」（已启用 `devtools` 特性，release 版同样可用）；或启动时设 `PI_WEB_DESKTOP_DEBUG=1` 自动打开 |
 | 直连本地服务 | 设 `PI_WEB_DESKTOP_DEV_URL=http://127.0.0.1:30141`：**完全跳过 sidecar**，窗口直接打开该地址，窗口标题带 ` (dev)`。前端迭代无需重新组装载荷、无需重装 |
 | 环境变量 | `PI_WEB_DESKTOP_DEBUG=1`（自动开 devtools）、`PI_WEB_DESKTOP_DEV_URL=<url>`（跳过 sidecar）、`PI_WEB_DESKTOP=1`（传给 sidecar，供前端识别桌面端） |
+| 单实例 | 已注册 `tauri-plugin-single-instance`：再次启动只会把已有窗口拉到前台，不会开第二个实例（两个实例会共用同一个 agent 目录，会写坏会话状态） |
+| 退出清理 | 托盘「退出」与 `RunEvent::Exit` 都用 `taskkill /F /T /PID` 结束**整个 sidecar 进程树**；只 `kill()` 直接子进程会留下 Next.js worker 占住端口 |
 
-日志目录实际路径：`%LOCALAPPDATA%\<identifier>\logs`（Windows，identifier 见 `tauri.conf.json`）。
+日志目录实际路径：`%APPDATA%\<identifier>\logs`（Windows，identifier 见 `tauri.conf.json`；便携版则是解压目录下的 `data\logs`）。
 
 排障顺序：启动无窗口 → 打开日志目录 → 看 `desktop.log` 末尾与 `startup-failure.txt` → 常见原因是 sidecar 参数或 `app/` 载荷缺失。
 

@@ -1,6 +1,6 @@
 [package]
 name = "pi-web-desktop"
-version = "0.13.0"
+version = "0.13.1"
 description = "Tauri v2 shell that ships Pi Web as a desktop app"
 authors = ["agegr"]
 license = "MIT"
@@ -32,6 +32,9 @@ tauri = { version = "2", features = ["tray-icon", "devtools"] }
 # non-ASCII install paths (os error 2).
 # tauri-plugin-shell = "2"
 tauri-plugin-process = "2"
+# Two copies of the app share one agent dir (sessions, run records), which
+# corrupts state; the second launch just focuses the running window instead.
+tauri-plugin-single-instance = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 # tauri-plugin-updater requires Rust >= 1.90.

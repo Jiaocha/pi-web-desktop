@@ -172,6 +172,28 @@ pub fn spawn(app: &AppHandle, port: u16, log: &Arc<ServerLog>) -> tauri::Result<
     Ok(child)
 }
 
+/// Kills the sidecar and everything it spawned. `Child::kill()` only
+/// terminates the direct child, but pi-web forks Next.js worker processes:
+/// those survive, keep the port bound and hold the agent dir open, so the next
+/// launch fails to start. On Windows `taskkill /T` walks the whole tree.
+pub fn kill_tree(app: &AppHandle, child: &mut Child) {
+    #[cfg(windows)]
+    {
+        let pid = child.id();
+        logging::write(app, &format!("stopping sidecar tree (pid {pid})"));
+        let mut command = StdCommand::new("taskkill");
+        command
+            .args(["/F", "/T", "/PID", &pid.to_string()])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+        let _ = command.status();
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
 /// Waits for the sidecar to accept connections. Fails fast when the child
 /// exits, reporting its exit code and output instead of burning the timeout.
 pub fn wait_until_ready(
