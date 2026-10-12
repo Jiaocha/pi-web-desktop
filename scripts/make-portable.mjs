@@ -353,7 +353,10 @@ async function main() {
   fs.rmSync(zipFile, { force: true });
   const tool = zipFolder(distDir, folderName, zipFile);
 
-  console.log(`✓ portable folder ${mb(sizeOf(rootDir))} -> ${path.relative(projectDir, zipFile)} (${mb(sizeOf(zipFile))}, ${tool})`);
+  const zipped = fs.statSync(zipFile).size;
+  console.log(
+    `✓ portable folder ${mb(sizeOf(rootDir))} -> ${path.relative(projectDir, zipFile)} (${mb(zipped)}, ${tool})`,
+  );
   console.log(`::set-output name=zip::${zipFile}`);
   console.log(`ZIP=${zipFile}`);
 }
