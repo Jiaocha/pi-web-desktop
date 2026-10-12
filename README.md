@@ -93,6 +93,52 @@ Pi-Web-Desktop-<version>-portable-win64/
 
 排障顺序：启动无窗口 → 打开日志目录 → 看 `desktop.log` 末尾与 `startup-failure.txt` → 常见原因是 sidecar 参数或 `app/` 载荷缺失。
 
+## 模型 API 故障排查
+
+模型配置不在壳里，而在 pi-web 的 agent 目录：
+
+| 形态 | 路径 |
+|---|---|
+| 便携版 | `<解压目录>\data\pi\agent\models.json` |
+| 安装版 | `%USERPROFILE%\.pi\agent\models.json` |
+
+改完**无需重启**：pi-web 会在下一次请求时重新读取。
+
+### `Error: Unexpected message role.`
+
+模型本身报的错，不是壳的问题。pi-ai 对 `reasoning: true` 的模型默认把系统指令
+以 `role: "developer"` 发送（OpenAI o-series 的约定）：
+
+```js
+// node_modules/@earendil-works/pi-ai/dist/api/openai-completions.js:899
+const instructionRole = model.reasoning && compat.supportsDeveloperRole ? "developer" : "system";
+```
+
+OpenRouter / SGLang 风格的网关不认识 `developer`，直接 400。给对应模型关掉即可：
+
+```json
+{
+  "id": "Qwen3.8-27B",
+  "reasoning": true,
+  "compat": { "supportsDeveloperRole": false }
+}
+```
+
+模型级 `compat` 会覆盖自动探测（`openai-completions.js:1316`），所以这一处就够。
+判断方法：用同一个 key 直接打端点，`role: "system"` 返回 200 而 `role: "developer"`
+返回 `Unexpected message role.` 即为此问题。
+
+### `Error: Connection error.`
+
+`baseUrl` 指向的服务没起来或不可达。先确认端口在监听：
+
+```bash
+netstat -ano -p TCP | findstr ":8808"
+```
+
+注意 Node 的 `fetch`（undici）**不读** `HTTP_PROXY` / `HTTPS_PROXY`，所以"curl 能通"
+不代表 pi-web 能通；反过来，本机开了代理也不代表壳里的 sidecar 会走它。
+
 ### 用 DEV_URL 迭代前端
 
 ```bash
