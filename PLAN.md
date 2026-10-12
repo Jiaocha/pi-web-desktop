@@ -234,6 +234,11 @@
 | 开发者模式 | ✅ | `tray.rs` 托盘新增「开发者工具」（`window.open_devtools()`）与「打开日志目录」；`Cargo.toml` 启用 tauri `devtools` feature（release 也可用）；`PI_WEB_DESKTOP_DEBUG=1` 自动开 DevTools；`PI_WEB_DESKTOP=1` 供前端识别桌面端；`README.md` 新增「开发者模式」章节 | CI `rust`(fmt+check) ✅、`payload` ✅（run 38187756598） |  
 | 开发者模式 + | ✅ | `PI_WEB_DESKTOP_DEV_URL=<url>`：**跳过 sidecar** 直连本地服务，窗口标题带 ` (dev)`；仍 manage 空的 `ServerHandle`，保证 `RunEvent::Exit` 与托盘正常 | CI `rust`+`payload` ✅（run 38189827712）；前端迭代无需重组载荷/重装 |  
 | v0.12.1 发布 | ✅ | 三处版本 0.12.0 → 0.12.1，tag `v0.12.1` 触发 `Desktop release`（22m2s） | **已发布**（非草稿）：`Pi.Web.Desktop_0.12.1_x64-setup.exe`（103,545,130 B）+ `.sig` + `latest.json`，签名比对 **True** |
+| T13 便携版 | ✅ | 新增 `src-tauri/src/portable.rs`（`portable.txt` 标记 → `data_dir()`）+ `scripts/make-portable.mjs`；`logging.rs` 日志改 `<root>/data/logs`；`lib.rs` 用 `WebviewWindowBuilder::data_directory(<root>/data/webview)`、便携版跳过 updater；`server.rs` 传 `PI_CODING_AGENT_DIR=<root>/data/pi/agent`；发布工作流增加「组装 zip → 报告依赖 → 上传 Release」 | v0.13.0 发布：`Pi-Web-Desktop-0.13.0-portable-win64.zip`（**179.7 MB**，解压 602.5 MB，29982 条目）；实测两个 exe 的 VC/CRT imports 均为 **none** |
+| T13 踩坑① | ✅ | `sizeOf()` 对 zip 文件调 `readdirSync` → `ENOTDIR`（zip 其实已打好，只差最后一行日志） | 改为 `fs.statSync(zipFile).size` |
+| 启动修复② | ✅ | **根因：Tauri `path().resolve()` 返回 `\\?\` 规范化路径，作为程序名传给 `CreateProcessW` 被拒（os error 2）**。`server.rs` 改为自己解析 node 运行时与 payload、剥掉 `\\?\` 前缀，用 `std::process::Command` 启动（Windows 加 `CREATE_NO_WINDOW`）；退出检测改用 `Child::try_wait()`；stdout/stderr 用线程泵进日志环；移除 `tauri-plugin-shell` 与对应 capability | 本机实测：带 `\\?\` spawn → `[WinError 2] 系统找不到指定的文件。`（与现场报错逐字一致），去掉前缀即成功。本地 release exe 放进真实便携目录：`✓ Ready in ~340ms`，8→64s 全程 `HTTP 200`；`data/{logs,webview,pi/agent}` 全在解压目录内 |
+| 构建修复③ | ✅ | `schemars 0.8.22` 声明 `indexmap 1.x` 但没开 `std` feature → `IndexMap` 的 `S` 无默认类型 → `tauri-build` 编译失败。**必须写在 `[build-dependencies]`**（resolver v2 下构建依赖特性独立解析）；同时提交 `Cargo.lock` 防止 CI 再解析到坏组合 | 本地与 CI（run 38200856766）均通过 |
+| 本地构建流程 | ✅ | Rust 1.96 可用：`mkdir app` + 拷 `src-tauri/binaries/node-<triple>.exe` + `npm install` + `node scripts/make-icon.mjs` + `npx tauri icon` + `cargo build --release`（7m19s）。crates.io 慢时需 `CARGO_HTTP_LOW_SPEED_LIMIT=0 CARGO_HTTP_TIMEOUT=600` | **不消耗 GitHub 额度**即可产出可用 exe，已直接替换 `D:\IDM\压缩\...` 里的 exe |
 
 ---
 
