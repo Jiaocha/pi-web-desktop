@@ -27,7 +27,24 @@ fn debug_enabled() -> bool {
     )
 }
 
+/// PI_WEB_DESKTOP_DEV_URL points the shell at an already-running server
+/// (e.g. http://127.0.0.1:30141). The sidecar is skipped entirely, so
+/// frontend iteration needs no payload rebuild and no reinstall.
+fn dev_url() -> Option<String> {
+    std::env::var("PI_WEB_DESKTOP_DEV_URL")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
 fn boot(app: &tauri::AppHandle) -> tauri::Result<String> {
+    if let Some(url) = dev_url() {
+        logging::write(app, &format!("dev url override: {url} (sidecar skipped)"));
+        // Still manage an empty handle: RunEvent::Exit and the tray read it.
+        app.manage(ServerHandle(Mutex::new(None), Arc::new(ServerLog::new())));
+        return Ok(url);
+    }
+
     let port = server::pick_free_port()?;
     let url = format!("http://127.0.0.1:{port}");
     let log = Arc::new(ServerLog::new());
@@ -87,7 +104,11 @@ pub fn run() {
                         "main",
                         tauri::WebviewUrl::External(url.parse()?),
                     )
-                    .title("Pi Web")
+                    .title(if dev_url().is_some() {
+                        "Pi Web (dev)"
+                    } else {
+                        "Pi Web"
+                    })
                     .inner_size(1280.0, 850.0)
                     .min_inner_size(900.0, 620.0)
                     .decorations(true)

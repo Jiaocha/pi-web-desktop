@@ -2,7 +2,8 @@
 
 把 [Pi Web](https://github.com/agegr/pi-web)（全栈 Next.js 应用）打包成 Windows 桌面应用：
 Tauri v2 只做窗口壳与生命周期，真正的服务由内置的 Node sidecar 运行
-`bin/pi-web.js start`，WebView2 指向 `http://127.0.0.1:<动态端口>`。
+`bin/pi-web.js -H 127.0.0.1 -p <动态端口> --no-open`，WebView2 指向 `http://127.0.0.1:<动态端口>`。
+（注意：pi-web CLI **没有 `start` 子命令**，裸 `pi-web [options]` 才是启动服务。）
 
 ## 架构要点
 
@@ -52,11 +53,24 @@ npm run dev
 | 启动失败报告 | 失败时写 `logs/startup-failure.txt` 并自动用记事本打开 + 打开日志目录（不再静默退出） |
 | 日志目录 | 托盘右键 → 「打开日志目录」 |
 | 开发者工具 | 托盘右键 → 「开发者工具」（已启用 `devtools` 特性，release 版同样可用）；或启动时设 `PI_WEB_DESKTOP_DEBUG=1` 自动打开 |
-| 环境变量 | `PI_WEB_DESKTOP_DEBUG=1`（自动开 devtools）、`PI_WEB_DESKTOP=1`（传给 sidecar，供前端识别桌面端） |
+| 直连本地服务 | 设 `PI_WEB_DESKTOP_DEV_URL=http://127.0.0.1:30141`：**完全跳过 sidecar**，窗口直接打开该地址，窗口标题带 ` (dev)`。前端迭代无需重新组装载荷、无需重装 |
+| 环境变量 | `PI_WEB_DESKTOP_DEBUG=1`（自动开 devtools）、`PI_WEB_DESKTOP_DEV_URL=<url>`（跳过 sidecar）、`PI_WEB_DESKTOP=1`（传给 sidecar，供前端识别桌面端） |
 
 日志目录实际路径：`%LOCALAPPDATA%\<identifier>\logs`（Windows，identifier 见 `tauri.conf.json`）。
 
 排障顺序：启动无窗口 → 打开日志目录 → 看 `desktop.log` 末尾与 `startup-failure.txt` → 常见原因是 sidecar 参数或 `app/` 载荷缺失。
+
+### 用 DEV_URL 迭代前端
+
+```bash
+# 终端 1：单独跑 pi-web 的 dev/prod 服务（自己控制源码与热重载）
+cd src-app && PI_WEB_DESKTOP=1 node bin/pi-web.js -H 127.0.0.1 -p 30141 --no-open
+
+# 终端 2：壳直接连上去，不启 sidecar
+PI_WEB_DESKTOP_DEV_URL=http://127.0.0.1:30141 PI_WEB_DESKTOP_DEBUG=1 npm run dev
+```
+
+`PI_WEB_DESKTOP=1` 要由你自己传给服务进程（sidecar 模式下才是壳注入的），前端据此隐藏浏览器专有 UI。
 
 ## 发布（GitHub Actions）
 
@@ -78,8 +92,9 @@ npx tauri signer generate -w ~/.tauri/pi-web.key
 git tag v0.12.0 && git push origin v0.12.0
 ```
 
-工作流会：安装依赖 → node-pty 源码构建 → `next build --webpack` → `npm prune --omit=dev` →
-组装载荷（下载官方 Node 并校验 SHA256）→ `tauri build` → 签名 → 发布 **草稿 Release**
+工作流会：安装依赖 → `next build` → `npm prune --omit=dev` →
+组装载荷（下载官方 Node 并校验 SHA256，node-pty 用自带 prebuild，**不要** `--build-from-source`）→
+`tauri build` → 签名 → 发布 **草稿 Release**
 （含 `*.exe`、`*.sig`、`latest.json`）。人工验收后再手动发布草稿。
 
 Windows runner 自带 MSVC Build Tools 与 NSIS，因此不需要本地工具链。
