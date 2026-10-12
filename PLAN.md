@@ -158,6 +158,29 @@
 
 ---
 
+### 阶段 5：便携版（绿色免安装，新增需求）
+
+#### T13 · portable zip（解压即用）
+
+- **目标**：产出单个 zip，解压后双击即可运行；不安装、不写注册表、不需要管理员权限，运行时数据全部留在解压目录内，可放 U 盘。
+- **涉及文件**：新增 `src-tauri/src/portable.rs`、`scripts/make-portable.mjs`；改 `src-tauri/src/{lib.rs,logging.rs,server.rs}`、`.github/workflows/desktop-release.yml`、`package.json`、`.gitignore`、`README.md`
+- **依赖**：T3（复用已编译的 release exe，因此**不增加第二次 Rust 编译**）
+- **实现要点**
+  - `portable.txt` 标记文件放在 exe 同级 → 便携模式开关；无标记时行为与安装版完全一致（零回归风险）
+  - 三处路径重定向：日志 → `<root>/data/logs`；WebView2 profile → `<root>/data/webview`（`WebviewWindowBuilder::data_directory`）；pi-web 状态 → `<root>/data/pi/agent`（sidecar 传 `PI_CODING_AGENT_DIR`，实测 pi-web 全部状态都在 agent 目录下）
+  - `app_dir()` 增加回退：先查 Tauri resource dir，再查 exe 同级 `app/`
+  - 便携版**禁用自动更新**（更新走 NSIS 会写 Program Files）
+  - 附带 `vcruntime140*.dll`（实测 Rust exe 只依赖 UCRT，node.exe 自带，附带仅为兜底）、`runtime/` WebView2 引导器（best-effort 下载）、`README.txt`、`run-debug.bat`、`portable.txt`
+  - 压缩用 7z，缺 7z 回退 `tar -a`
+- **验收**：CI 绿；zip 上传到同一 Release；解压后双击 exe 出窗口；`data/` 下出现 `logs`、`webview`、`pi/agent`；把整个目录复制到别处（含 U 盘）后数据跟随；进程退出无残留 `node.exe`
+- **风险**
+  - WebView2 缺失的机器上窗口打不开 → 已在 `runtime/` 提供安装器与说明（Win10 21H2+/Win11 自带，绝大多数机器不受影响）
+  - 未代码签名 → SmartScreen 会拦截，需「更多信息 → 仍要运行」
+  - zip 体积较大（app 载荷 511MB，压缩后约 150–200MB）→ 由 T8 瘦身解决
+  - `PI_CODING_AGENT_DIR` 若被上游改名，便携化会失效 → `scripts/prepare-desktop.mjs` 未做断言，需在验收时确认 `data/pi/agent` 真的生成
+
+---
+
 ## 3. 子任务总表（依赖与并行）
 
 | ID | 任务 | 依赖 | 可并行 |
@@ -173,6 +196,7 @@
 | T9 | 体积门禁 | T8 | — |
 | T10 | 更新链路验证 | T3 + 第二个版本 | — |
 | T11/T12 | 代码签名 / 多平台 | T10 | 可选，最后 |
+| T13 | 便携版 zip | T3（复用 exe） | 与 T5/T6/T7 并行 |
 
 ## 4. 推荐执行顺序
 
