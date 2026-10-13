@@ -165,11 +165,17 @@ async function main() {
   const productName = config.productName;
   const ext = args.target.includes("windows") ? ".exe" : "";
 
-  // Tauri 2 writes every target to `target/release/`; the per-triple layout
-  // (`target/<triple>/release/`) is Tauri 1 and is only checked as a fallback so
-  // an older checkout still works. Hardcoding the Tauri 1 path made this script
-  // fail on any clean build, which is exactly when it matters most.
-  const builtExe = ["", args.target]
+  // Which `target/` subdirectory holds the binary depends on how the build was
+  // invoked, and getting it wrong means reading a path that never exists:
+  //
+  //   --target <triple>  ->  target/<triple>/release/   (per-triple)
+  //   no --target        ->  target/release/
+  //
+  // Both layouts exist in Tauri 2; the plain `target/release/` one is *not* the
+  // modern answer to the per-triple one. The release workflow passes --target,
+  // so per-triple is the primary path here and `target/release/` is checked
+  // second. Both are tried, so a caller that builds either way still works.
+  const builtExe = [args.target, ""]
     .map((prefix) =>
       path.join(
         projectDir,
