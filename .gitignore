@@ -1,5 +1,7 @@
 # 运行脚本生成：Next 构建产物 + 生产依赖 + node.exe sidecar
-/app
+# `/app*` 而非 `/app`：重建时若删除被环境护栏拦下，目录会被改名让开
+# （app-stale-<version> / app-partial-<n>），那些同样是构建产物。
+/app*
 /src-tauri/binaries/*
 /src-tauri/target
 /src-tauri/gen
