@@ -165,16 +165,27 @@ async function main() {
   const productName = config.productName;
   const ext = args.target.includes("windows") ? ".exe" : "";
 
-  const builtExe = path.join(
-    projectDir,
-    "src-tauri",
-    "target",
-    args.target,
-    "release",
-    `${binName}${ext}`,
-  );
-  if (!fs.existsSync(builtExe)) {
-    throw new Error(`Release binary not found: ${builtExe}\nRun the Tauri build first.`);
+  // Tauri 2 writes every target to `target/release/`; the per-triple layout
+  // (`target/<triple>/release/`) is Tauri 1 and is only checked as a fallback so
+  // an older checkout still works. Hardcoding the Tauri 1 path made this script
+  // fail on any clean build, which is exactly when it matters most.
+  const builtExe = ["", args.target]
+    .map((prefix) =>
+      path.join(
+        projectDir,
+        "src-tauri",
+        "target",
+        ...(prefix ? [prefix] : []),
+        "release",
+        `${binName}${ext}`,
+      ),
+    )
+    .find((candidate) => fs.existsSync(candidate));
+  if (!builtExe) {
+    throw new Error(
+      `Release binary not found under src-tauri/target{,/${args.target}}/release/${binName}${ext}\n` +
+        `Run the Tauri build first.`,
+    );
   }
   const sidecar = path.join(
     projectDir,

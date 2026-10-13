@@ -76,6 +76,33 @@ Pi-Web-Desktop-<version>-portable-win64/
 组装脚本是 `scripts/make-portable.mjs`（`npm run portable -- --target x86_64-pc-windows-msvc`），
 压缩用 7z，缺 7z 时回退 `tar -a`。
 
+## 可选：内置 Rust 核心
+
+pi-web 正在把后端逻辑逐步迁到 Rust（见 pi-web 仓库的 `RUST-MIGRATION-PLAN.md`）。
+目前是**可选**的：payload 里没有 `native/pi-core.node` 时，
+`lib/rust-core.ts` 返回 null，一切回退 TypeScript，功能完全正常。
+`PI_CORE_MODE` 控制它是否参与出答案：
+
+| 值 | 行为 |
+|---|---|
+| `off` | Rust 不参与（回退 TS） |
+| `shadow` | **默认**。Rust 跑并与 TS 比对，但答案仍由 TS 给出 |
+| `on` | Rust 可以出答案；出错即回退 TS |
+
+要让便携版带上它，在 pi-web 源码目录执行一次
+`node scripts/build-native.mjs`（需要 Rust 工具链），再跑 `prepare-desktop.mjs`
+——它会把 `native/` 拷进 `app/`。缺失时脚本只打印警告，
+因为运行时回退是无害的；但**发布流水线**会用 `PI_REQUIRE_RUST_CORE=1`
+把它变成硬失败，避免悄悄发布一个其实没走 Rust 的包。
+
+查看实际是否加载：`data\logs\desktop.log` 里的 `[rust-core]` 行，
+或在 `PI_CORE_MODE=shadow` 下观察是否出现 `walk diverged` 告警。
+
+> **Cargo workspace 注意**：pi-web 仓库根目录是 Cargo workspace，
+> 而本仓库嵌套在它下面。pi-web 的 `Cargo.toml` 因此需要
+> `exclude = ["desktop"]`，否则 `tauri build` 会报
+> `current package believes it's in a workspace when it's not`。
+
 ## 开发者模式
 
 | 能力 | 用法 |

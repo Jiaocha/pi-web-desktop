@@ -137,13 +137,18 @@ function copyIfExists(source, destination, filter) {
   return true;
 }
 
-function assembleApp(srcAppDir, appDir) {
+function assembleApp(srcAppDir, appDir, target) {
   fs.rmSync(appDir, { recursive: true, force: true });
   fs.mkdirSync(appDir, { recursive: true });
 
+  // Next.js writes to `.next` unless PI_DIST_DIR redirects it (see the app's
+  // next.config.ts), which is how a build targets a fresh directory instead of
+  // clearing an existing one. The payload always lands in `app/.next`, because
+  // that is where bin/pi-web.js looks.
+  const distName = process.env.PI_DIST_DIR || ".next";
+  const nextDir = path.join(srcAppDir, distName);
   // .next/cache and .next/dev are build scratch space; shipping them inflates
   // the installer and can pin stale dev artifacts.
-  const nextDir = path.join(srcAppDir, ".next");
   const scratch = new Set([path.join(nextDir, "cache"), path.join(nextDir, "dev")]);
   const skipScratch = (source) => !scratch.has(source);
 
@@ -163,6 +168,50 @@ function assembleApp(srcAppDir, appDir) {
   const modules = path.join(srcAppDir, "node_modules");
   if (!fs.existsSync(modules)) throw new Error("No node_modules; run `npm ci` first.");
   fs.cpSync(modules, path.join(appDir, "node_modules"), { recursive: true, dereference: false });
+
+  copyRustCore(srcAppDir, appDir, target);
+}
+
+/**
+ * Copy the optional Rust addon next to the app.
+ *
+ * `lib/rust-core.ts` resolves `native/pi-core.node` at runtime, relative to the
+ * working directory, so the addon has to sit inside the shipped `app/` for the
+ * desktop build to use it at all. It is optional by design: without it the
+ * wrapper returns null and everything falls back to TypeScript, which is why a
+ * missing binary is a note rather than an error here. `PI_REQUIRE_RUST_CORE=1`
+ * turns that into a hard failure for the release pipeline, where shipping a
+ * payload that silently lost its native half would be worse than not shipping.
+ */
+function copyRustCore(srcAppDir, appDir, target) {
+  const source = path.join(srcAppDir, "native");
+  if (!fs.existsSync(source)) {
+    const message =
+      "no native/ directory - the Rust core is absent and the app will run the TypeScript path";
+    if (process.env.PI_REQUIRE_RUST_CORE === "1") {
+      throw new Error(`${message} (PI_REQUIRE_RUST_CORE=1)`);
+    }
+    console.log(`! ${message}`);
+    return;
+  }
+
+  const destination = path.join(appDir, "native");
+  fs.mkdirSync(destination, { recursive: true });
+  fs.cpSync(source, destination, { recursive: true, dereference: false });
+
+  const shipped = fs.readdirSync(destination).filter((name) => name.endsWith(".node"));
+  if (shipped.length === 0) {
+    const message = "native/ contains no .node - the Rust core would never load";
+    if (process.env.PI_REQUIRE_RUST_CORE === "1") {
+      throw new Error(`${message} (PI_REQUIRE_RUST_CORE=1)`);
+    }
+    console.log(`! ${message}`);
+    return;
+  }
+  for (const name of shipped) {
+    const size = fs.statSync(path.join(destination, name)).size;
+    console.log(`✓ rust core: native/${name} (${(size / 1024).toFixed(0)} KB, ${target})`);
+  }
 }
 
 /**
@@ -226,7 +275,7 @@ async function main() {
     return;
   }
 
-  assembleApp(srcAppDir, appDir);
+  assembleApp(srcAppDir, appDir, args.target);
   assertNativePty(appDir, args.target);
 
   const buildId = path.join(appDir, ".next", "BUILD_ID");

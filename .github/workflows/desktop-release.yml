@@ -97,12 +97,25 @@ jobs:
         env:
           NEXT_TELEMETRY_DISABLED: "1"
 
+      # The Rust core is optional at runtime - lib/rust-core.ts falls back to
+      # TypeScript when the addon is absent - which means a release that
+      # silently lost native/ would still pass every functional check while
+      # shipping the slow path. Build it here and let prepare-desktop assert it.
+      - name: Build the Rust core
+        run: node scripts/build-native.mjs
+        working-directory: src-app
+
       - name: Drop dev dependencies
         run: npm prune --omit=dev
         working-directory: src-app
 
       - name: Assemble runtime payload + Node sidecar
         run: node scripts/prepare-desktop.mjs --target ${{ matrix.target }} --node-version ${{ env.NODE_VERSION }}
+        env:
+          # The app runs correctly without the addon, so a missing one is only a
+          # warning by default. For a release it is a defect: fail here rather
+          # than publish a payload that quietly stopped using Rust.
+          PI_REQUIRE_RUST_CORE: "1"
 
       - name: Generate app icons
         # 仓库不提交二进制图标；有真实品牌图时替换 app-icon.png 并提交即可。
