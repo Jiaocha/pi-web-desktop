@@ -176,13 +176,17 @@ jobs:
           version=$(node -p "require('./src-tauri/tauri.conf.json').version")
           gh release upload "v${version}" dist/*.zip --clobber --repo "${{ github.repository }}"
 
+      # Tauri 2 writes every target to `src-tauri/target/release/`, not to the
+      # per-triple `target/<triple>/release/` layout Tauri 1 used. Pointing this
+      # at the old path makes `if-no-files-found: error` fail the job after a
+      # perfectly good build. scripts/make-portable.mjs already looks in both.
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
           name: pi-web-desktop-${{ matrix.target }}
           path: |
-            src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
-            src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.sig
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/nsis/*.sig
           if-no-files-found: error
 
       - name: Upload portable artifact
